@@ -1255,6 +1255,10 @@ function OverviewModule({db}){
   const [fitPLOv,setFitPLOv]=useState([]);
   const [recPLOv,setRecPLOv]=useState([]);
   const [loading,setLoading]=useState(true);
+  const [campSelYear,setCampSelYear]=useState(null);
+  const [cbSelYear,setCbSelYear]=useState(null);
+  const [recSelFY,setRecSelFY]=useState(null);
+  const [fitSelFY,setFitSelFY]=useState(null);
 
   useEffect(()=>{
     setLoading(true);
@@ -1288,59 +1292,110 @@ function OverviewModule({db}){
   const recPLByFY=useMemo(()=>{const m={};recPLOv.forEach(r=>{m[r.fiscal_year]=r.profit_loss;});return m;},[recPLOv]);
   const membersByFY=useMemo(()=>{const m={};fitKpi.filter(r=>r.metric==="Active Members"&&r.total>0).forEach(r=>{m[r.fiscal_year]=r.total;});return m;},[fitKpi]);
 
-  const campLatest=campByYear[campByYear.length-1];const campPrior=campByYear[campByYear.length-2];
-  const cbLatest=cbByYear[cbByYear.length-1];const cbPrior=cbByYear[cbByYear.length-2];
-  const fitFYs=Object.entries(fitRevByFY).sort((a,b)=>a[0].localeCompare(b[0]));
-  const fitLatest=fitFYs[fitFYs.length-1];const fitPrior=fitFYs[fitFYs.length-2];
-  const recFYs=Object.entries(recRevByFY).sort((a,b)=>a[0].localeCompare(b[0]));
-  const recLatest=recFYs[recFYs.length-1];const recPrior=recFYs[recFYs.length-2];
-  const memFYs=Object.entries(membersByFY).sort((a,b)=>a[0].localeCompare(b[0]));
-  const memLatest=memFYs[memFYs.length-1];
+  // Available years/FYs for each fund
+  const campYears=campByYear.map(r=>r.year);
+  const cbYears=cbByYear.map(r=>r.year);
+  const fitFYsSorted=Object.keys(fitRevByFY).sort();
+  const recFYsSorted=Object.keys(recRevByFY).sort();
+
+  // Resolve selected year — default to latest if not set
+  const campYear=campSelYear&&campYears.includes(campSelYear)?campSelYear:(campYears[campYears.length-1]||null);
+  const cbYear=cbSelYear&&cbYears.includes(cbSelYear)?cbSelYear:(cbYears[cbYears.length-1]||null);
+  const fitFY=fitSelFY&&fitFYsSorted.includes(fitSelFY)?fitSelFY:(fitFYsSorted[fitFYsSorted.length-1]||null);
+  const recFY=recSelFY&&recFYsSorted.includes(recSelFY)?recSelFY:(recFYsSorted[recFYsSorted.length-1]||null);
+
+  // Card data for selected years
+  const campSel=campByYear.find(r=>r.year===campYear)||null;
+  const campPrior=campByYear.find(r=>r.year===(campYear-1))||null;
+  const cbSel=cbByYear.find(r=>r.year===cbYear)||null;
+  const cbPrior=cbByYear.find(r=>r.year===(cbYear-1))||null;
+  const fitRevSel=fitRevByFY[fitFY]||null;
+  const fitPLSel=fitPLByFY[fitFY]??null;
+  const fitFYPrior=fitFYsSorted[fitFYsSorted.indexOf(fitFY)-1]||null;
+  const fitRevPrior=fitFYPrior?fitRevByFY[fitFYPrior]:null;
+  const recRevSel=recRevByFY[recFY]||null;
+  const recPLSel=recPLByFY[recFY]??null;
+  const recFYPrior=recFYsSorted[recFYsSorted.indexOf(recFY)-1]||null;
+  const recRevPrior=recFYPrior?recRevByFY[recFYPrior]:null;
+  const memSel=membersByFY[fitFY]||null;
 
   const combined=useMemo(()=>{
-    const fys=[...new Set([...fitFYs.map(f=>f[0]),...recFYs.map(f=>f[0])])].sort();
+    const fys=[...new Set([...fitFYsSorted,...recFYsSorted])].sort();
     return fys.map(fy=>({fy,fitness:fitRevByFY[fy]||null,recreation:recRevByFY[fy]||null,fitPL:fitPLByFY[fy]||null,recPL:recPLByFY[fy]||null})).filter(r=>r.fitness||r.recreation);
-  },[fitRevByFY,recRevByFY,fitPLByFY,recPLByFY,fitFYs,recFYs]);
-
-  const cards=[
-    {title:"Camps",color:NAVY,year:campLatest?.year,revenue:campLatest?.revenue,pl:campLatest?.profit_loss,plPct:campLatest?.revenue>0&&campLatest?.profit_loss!=null?campLatest.profit_loss/campLatest.revenue:null,extra:`${num(campLatest?.enrollment)} enrolled`,trend:campLatest&&campPrior&&campPrior.revenue>0?((campLatest.revenue-campPrior.revenue)/campPrior.revenue)*100:null},
-    {title:"Clubhouse",color:"#0f766e",year:cbLatest?.year,revenue:cbLatest?.revenue,pl:cbLatest?.profit_loss,plPct:cbLatest?.revenue>0&&cbLatest?.profit_loss!=null?cbLatest.profit_loss/cbLatest.revenue:null,extra:"All 10 sites",trend:cbLatest&&cbPrior&&cbPrior.revenue>0?((cbLatest.revenue-cbPrior.revenue)/cbPrior.revenue)*100:null},
-    {title:"Recreation Fund 4",color:"#7c3aed",year:recLatest?.[0],revenue:recLatest?.[1],pl:recPLByFY[recLatest?.[0]]||null,plPct:recPLByFY[recLatest?.[0]]!=null&&recLatest?.[1]>0?recPLByFY[recLatest[0]]/recLatest[1]:null,extra:"Overall fund",trend:recLatest&&recPrior&&recPrior[1]>0?((recLatest[1]-recPrior[1])/recPrior[1])*100:null},
-    {title:"Fitness Center",color:GOLD,year:fitLatest?.[0],revenue:fitLatest?.[1],pl:fitPLByFY[fitLatest?.[0]]||null,plPct:fitPLByFY[fitLatest?.[0]]!=null&&fitLatest?.[1]>0?fitPLByFY[fitLatest[0]]/fitLatest[1]:null,extra:`${memLatest?num(memLatest[1]):"—"} active members`,trend:fitLatest&&fitPrior&&fitPrior[1]>0?((fitLatest[1]-fitPrior[1])/fitPrior[1])*100:null},
-  ];
+  },[fitRevByFY,recRevByFY,fitPLByFY,recPLByFY,fitFYsSorted,recFYsSorted]);
 
   if(loading)return <div className="text-center py-20 text-slate-400 text-sm">Loading data…</div>;
 
-  return(<div className="space-y-6">
-    <div><h2 className="font-bold text-slate-800 text-base">BGPD Rec Funds — Overview</h2><p className="text-xs text-slate-400 mt-0.5">All four funds at a glance</p></div>
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {cards.map(c=>(<div key={c.title} className="bg-white rounded-xl shadow-sm overflow-hidden" style={{borderTop:`4px solid ${c.color}`}}>
-        <div className="px-5 py-4">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{color:c.color}}>{c.title}</div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><div className="text-xs text-slate-400 mb-0.5">Revenue</div><div className="text-xl font-black text-slate-800">{c.revenue?dollar(c.revenue):"No data yet"}</div><div className="text-xs text-slate-400 mt-0.5">{c.year||"—"}</div></div>
-            <div><div className="text-xs text-slate-400 mb-0.5">Net P/(L)</div>
-              <div className={`text-xl font-black ${c.pl!=null?(c.pl>=0?"text-green-700":"text-red-600"):"text-slate-300"}`}>{c.pl!=null?dollar(c.pl):"—"}</div>
-              {c.plPct!=null&&<div className="text-xs mt-0.5 font-semibold" style={{color:c.plPct>=0?"#16a34a":"#dc2626"}}>{pct(c.plPct)} margin</div>}
-            </div>
+  // Fund card component with year picker inline
+  function FundCard({title,color,yearOptions,selectedYear,onYearChange,revenue,pl,plPct,extra,trend,isFY=false}){
+    return(<div className="bg-white rounded-xl shadow-sm overflow-hidden" style={{borderTop:`4px solid ${color}`}}>
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-bold uppercase tracking-widest" style={{color}}>{title}</div>
+          {yearOptions.length>0&&(
+            <select value={selectedYear||""} onChange={e=>onYearChange(isFY?e.target.value:parseInt(e.target.value))}
+              className="text-xs rounded border border-slate-200 px-2 py-1 bg-white focus:outline-none focus:ring-1 max-w-[110px]">
+              {yearOptions.map(y=><option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-xs text-slate-400 mb-0.5">Revenue</div>
+            <div className="text-xl font-black text-slate-800">{revenue?dollar(revenue):"No data"}</div>
           </div>
-          <div className="mt-3 flex items-center justify-between">
-            <div className="text-xs text-slate-400">{c.extra}</div>
-            {c.trend!=null&&<div className="text-xs font-semibold" style={{color:tc(c.trend)}}>{c.trend>=0?"↑":"↓"} {Math.abs(c.trend).toFixed(1)}% YoY</div>}
+          <div>
+            <div className="text-xs text-slate-400 mb-0.5">Net P/(L)</div>
+            <div className={`text-xl font-black ${pl!=null?(pl>=0?"text-green-700":"text-red-600"):"text-slate-300"}`}>{pl!=null?dollar(pl):"—"}</div>
+            {plPct!=null&&<div className="text-xs mt-0.5 font-semibold" style={{color:plPct>=0?"#16a34a":"#dc2626"}}>{pct(plPct)} margin</div>}
           </div>
         </div>
-      </div>))}
+        <div className="mt-3 flex items-center justify-between">
+          <div className="text-xs text-slate-400">{extra}</div>
+          {trend!=null&&<div className="text-xs font-semibold" style={{color:tc(trend)}}>{trend>=0?"↑":"↓"} {Math.abs(trend).toFixed(1)}% YoY</div>}
+        </div>
+      </div>
+    </div>);
+  }
+
+  return(<div className="space-y-6">
+    <div><h2 className="font-bold text-slate-800 text-base">BGPD Rec Funds — Overview</h2><p className="text-xs text-slate-400 mt-0.5">Select a year on each card to compare any period</p></div>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FundCard title="Camps" color={NAVY}
+        yearOptions={[...campYears].reverse()} selectedYear={campYear} onYearChange={setCampSelYear}
+        revenue={campSel?.revenue} pl={campSel?.profit_loss}
+        plPct={campSel?.revenue>0&&campSel?.profit_loss!=null?campSel.profit_loss/campSel.revenue:null}
+        extra={`${num(campSel?.enrollment)} enrolled`}
+        trend={campSel&&campPrior&&campPrior.revenue>0?((campSel.revenue-campPrior.revenue)/campPrior.revenue)*100:null}/>
+      <FundCard title="Clubhouse" color="#0f766e"
+        yearOptions={[...cbYears].reverse()} selectedYear={cbYear} onYearChange={setCbSelYear}
+        revenue={cbSel?.revenue} pl={cbSel?.profit_loss}
+        plPct={cbSel?.revenue>0&&cbSel?.profit_loss!=null?cbSel.profit_loss/cbSel.revenue:null}
+        extra="All 10 sites"
+        trend={cbSel&&cbPrior&&cbPrior.revenue>0?((cbSel.revenue-cbPrior.revenue)/cbPrior.revenue)*100:null}/>
+      <FundCard title="Recreation Fund 4" color="#7c3aed" isFY
+        yearOptions={[...recFYsSorted].reverse()} selectedYear={recFY} onYearChange={setRecSelFY}
+        revenue={recRevSel} pl={recPLSel}
+        plPct={recPLSel!=null&&recRevSel>0?recPLSel/recRevSel:null}
+        extra="Overall fund"
+        trend={recRevSel&&recRevPrior&&recRevPrior>0?((recRevSel-recRevPrior)/recRevPrior)*100:null}/>
+      <FundCard title="Fitness Center" color={GOLD} isFY
+        yearOptions={[...fitFYsSorted].reverse()} selectedYear={fitFY} onYearChange={setFitSelFY}
+        revenue={fitRevSel} pl={fitPLSel}
+        plPct={fitPLSel!=null&&fitRevSel>0?fitPLSel/fitRevSel:null}
+        extra={`${memSel?num(memSel):"—"} active members`}
+        trend={fitRevSel&&fitRevPrior&&fitRevPrior>0?((fitRevSel-fitRevPrior)/fitRevPrior)*100:null}/>
     </div>
     {combined.length>1&&(
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TrendChart data={combined} xKey="fy" keys={[{key:"fitness",name:"Fitness"},{key:"recreation",name:"Recreation"}]} title="Revenue — Fitness & Recreation" height={220}/>
-        <TrendChart data={combined.filter(r=>r.fitPL!=null||r.recPL!=null)} xKey="fy" keys={[{key:"fitPL",name:"Fitness P/L"},{key:"recPL",name:"Recreation P/L"}]} title="P/L Trend — Fitness & Recreation" height={220}/>
+        <MultiYearChart data={combined} xKey="fy" keys={[{key:"fitness",name:"Fitness"},{key:"recreation",name:"Recreation"}]} title="Revenue — Fitness & Recreation" height={220}/>
+        <MultiYearChart data={combined.filter(r=>r.fitPL!=null||r.recPL!=null)} xKey="fy" keys={[{key:"fitPL",name:"Fitness P/L"},{key:"recPL",name:"Recreation P/L"}]} title="P/L Trend — Fitness & Recreation" height={220}/>
       </div>
     )}
     {campByYear.length>1&&(
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TrendChart data={campByYear} xKey="year" keys={[{key:"enrollment",name:"Enrollment"}]} title="Camps — Total Enrollment by Year" fmt={num} height={200}/>
-        <TrendChart data={cbByYear} xKey="year" keys={[{key:"revenue",name:"Revenue"},{key:"profit_loss",name:"P/L"}]} title="Clubhouse — Revenue & P/L" height={200}/>
+        <MultiYearChart data={campByYear} xKey="year" keys={[{key:"enrollment",name:"Enrollment"}]} title="Camps — Total Enrollment by Year" fmt={num} height={200}/>
+        <MultiYearChart data={cbByYear} xKey="year" keys={[{key:"revenue",name:"Revenue"},{key:"profit_loss",name:"P/L"}]} title="Clubhouse — Revenue & P/L" height={200}/>
       </div>
     )}
   </div>);}
