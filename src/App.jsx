@@ -368,6 +368,7 @@ function CampsModule({db}){
 
     {subView==="pl"&&(<div className="space-y-4">
       <h3 className="font-semibold text-slate-700 text-sm">P/L Summary — All Camps, Latest Year</h3>
+      {portfolio.length>1&&<TrendChart data={portfolio} xKey="year" keys={[{key:"revenue",name:"Revenue"},{key:"profit_loss",name:"P/L"}]} title="Portfolio Revenue & P/L by Year" height={200}/>}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 grid grid-cols-5 text-xs font-bold text-slate-400 uppercase tracking-wider">
           <span>Camp</span><span className="text-right">Revenue</span><span className="text-right">Expenses</span><span className="text-right">P/(L)</span><span className="text-right">Margin</span>
@@ -712,6 +713,16 @@ function RecreationModule({db}){
     setSaving(false);setShowEntry(false);load();
   }
 
+  const subViews=[["overview","Overview"],["pl","P/L by Area"],["revenue","Revenue"],["expenses","Expenses"]];
+
+  // Latest FY P/L by area
+  const plByArea=useMemo(()=>REC_PL_CATS.map(cat=>{
+    const row=plByKey[`${cat.trim()}__${selFY}`];
+    const rev=revByKey[`${cat.trim()}__${selFY}`];
+    return{category:cat.trim(),total:row?.total||null,margin:row?.margin||null,revenue:rev?.total||null,
+      pl_pct:row?.total!=null&&rev?.total>0?row.total/rev.total:null};
+  }),[plByKey,revByKey,selFY]);
+
   if(showEntry){
     const cats=entryType==="pl"?REC_PL_CATS:entryType==="revenue"?REC_REV_CATS:REC_EXP_CATS;
     return(<div className="space-y-5">
@@ -729,16 +740,6 @@ function RecreationModule({db}){
         <div className="flex justify-end gap-3"><Btn onClick={()=>setShowEntry(false)} variant="outline">Cancel</Btn><button onClick={saveEntry} disabled={saving} className="px-5 py-2 text-sm font-bold text-white rounded-lg disabled:opacity-40" style={{background:NAVY}}>{saving?"Saving…":"Save"}</button></div>
       </div>
     </div>);}
-
-  const subViews=[["overview","Overview"],["pl","P/L by Area"],["revenue","Revenue"],["expenses","Expenses"]];
-
-  // Latest FY P/L by area
-  const plByArea=useMemo(()=>REC_PL_CATS.map(cat=>{
-    const row=plByKey[`${cat.trim()}__${selFY}`];
-    const rev=revByKey[`${cat.trim()}__${selFY}`];
-    return{category:cat.trim(),total:row?.total||null,margin:row?.margin||null,revenue:rev?.total||null,
-      pl_pct:row?.total!=null&&rev?.total>0?row.total/rev.total:null};
-  }),[plByKey,revByKey,selFY]);
 
   return(<div className="space-y-6">
     <div className="flex items-center justify-between flex-wrap gap-2">
@@ -819,23 +820,62 @@ function RecreationModule({db}){
 
     {subView==="pl"&&(<div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-semibold text-slate-700">P/L by Area — Monthly</h3>
+        <h3 className="font-semibold text-slate-700">P/L by Area — {selFY}</h3>
         <Sel value={selFY} onChange={setSelFY} options={FY_LIST}/>
       </div>
+      {(()=>{const chartData=plByArea.filter(r=>r.total!=null).map(r=>({category:r.category,pl:r.total})).sort((a,b)=>b.pl-a.pl);return chartData.length>0&&(
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">P/L by Area — {selFY}</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={chartData} margin={{top:5,right:10,left:10,bottom:80}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+              <XAxis dataKey="category" tick={{fontSize:9}} angle={-40} textAnchor="end" interval={0}/>
+              <YAxis tick={{fontSize:10}} tickFormatter={v=>v>=1000?`$${(v/1000).toFixed(0)}k`:v<=-1000?`($${(Math.abs(v)/1000).toFixed(0)}k)`:String(Math.round(v))}/>
+              <Tooltip content={<Tip/>}/><Bar dataKey="pl" name="P/L" fill={NAVY}/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      );})()}
       <MonthlyTable cats={REC_PL_CATS} byKey={plByKey} selFY={selFY} months={FY_MONTHS} onEdit={cat=>openEntry("pl",cat,selFY)}/>
     </div>)}
     {subView==="revenue"&&(<div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-semibold text-slate-700">Revenue by Area — Monthly</h3>
+        <h3 className="font-semibold text-slate-700">Revenue by Area — {selFY}</h3>
         <Sel value={selFY} onChange={setSelFY} options={FY_LIST}/>
       </div>
+      {(()=>{const rvData=REC_REV_CATS.map(cat=>{const r=revByKey[`${cat.trim()}__${selFY}`];return r?.total?{category:cat.trim(),revenue:r.total}:null;}).filter(Boolean).sort((a,b)=>b.revenue-a.revenue);return rvData.length>0&&(
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Revenue by Area — {selFY}</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={rvData} margin={{top:5,right:10,left:10,bottom:80}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+              <XAxis dataKey="category" tick={{fontSize:9}} angle={-40} textAnchor="end" interval={0}/>
+              <YAxis tick={{fontSize:10}} tickFormatter={v=>v>=1000?`$${(v/1000).toFixed(0)}k`:String(Math.round(v))}/>
+              <Tooltip content={<Tip/>}/><Bar dataKey="revenue" name="Revenue" fill={GOLD}/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      );})()}
       <MonthlyTable cats={REC_REV_CATS} byKey={revByKey} selFY={selFY} months={FY_MONTHS} onEdit={cat=>openEntry("revenue",cat,selFY)}/>
     </div>)}
     {subView==="expenses"&&(<div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-semibold text-slate-700">Expenses by Category — Monthly</h3>
+        <h3 className="font-semibold text-slate-700">Expenses by Category — {selFY}</h3>
         <Sel value={selFY} onChange={setSelFY} options={FY_LIST}/>
       </div>
+      {(()=>{const exData=REC_EXP_CATS.map(cat=>{const r=expByKey[`${cat.trim()}__${selFY}`];return r?.total?{category:cat.trim(),expenses:r.total}:null;}).filter(Boolean).sort((a,b)=>b.expenses-a.expenses);return exData.length>0&&(
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Expenses by Category — {selFY}</h3>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={exData} margin={{top:5,right:10,left:10,bottom:10}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+              <XAxis dataKey="category" tick={{fontSize:10}}/>
+              <YAxis tick={{fontSize:10}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
+              <Tooltip content={<Tip/>}/><Bar dataKey="expenses" name="Expenses" fill="#64748b"/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      );})()}
       <MonthlyTable cats={REC_EXP_CATS} byKey={expByKey} selFY={selFY} months={FY_MONTHS} onEdit={cat=>openEntry("expenses",cat,selFY)}/>
     </div>)}
   </div>);}
@@ -1014,9 +1054,30 @@ function FitnessModule({db}){
 
     {(subView==="revenue"||subView==="expenses")&&(<div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-semibold text-slate-700">{subView==="revenue"?"Revenue":"Expenses"} by Category</h3>
+        <h3 className="font-semibold text-slate-700">{subView==="revenue"?"Revenue":"Expenses"} by Category — {selFY}</h3>
         <div className="flex gap-2"><Sel value={selFY} onChange={setSelFY} options={FY_LIST}/><Btn onClick={()=>openEntry(subView,subView==="revenue"?FIT_REV_CATS[0]:FIT_EXP_CATS[0],selFY)}>+ Enter</Btn></div>
       </div>
+      {(()=>{
+        const cats=subView==="revenue"?FIT_REV_CATS:FIT_EXP_CATS;
+        const byKey=subView==="revenue"?revByKey:expByKey;
+        const key=subView==="revenue"?"revenue":"expenses";
+        const chartData=cats.map(cat=>{const r=byKey[`${cat}__${selFY}`];return r?.total?{category:cat,value:r.total}:null;}).filter(Boolean).sort((a,b)=>b.value-a.value);
+        const trendData=FY_LIST.map(fy=>{const row={fy};cats.slice(0,4).forEach(cat=>{const r=byKey[`${cat}__${fy}`];row[cat]=r?.total||null;});return Object.values(row).some(v=>v!=null&&v!==fy)?row:null;}).filter(Boolean);
+        return(<>
+          {chartData.length>0&&<div className="bg-white rounded-lg shadow-sm p-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">{subView==="revenue"?"Revenue":"Expenses"} by Category — {selFY}</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={chartData} margin={{top:5,right:10,left:10,bottom:40}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+                <XAxis dataKey="category" tick={{fontSize:10}} angle={-20} textAnchor="end" interval={0}/>
+                <YAxis tick={{fontSize:10}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
+                <Tooltip content={<Tip/>}/><Bar dataKey="value" name={subView==="revenue"?"Revenue":"Expenses"} fill={subView==="revenue"?NAVY:"#64748b"}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>}
+          {trendData.length>1&&<TrendChart data={trendData} xKey="fy" keys={cats.slice(0,4).map((cat,i)=>({key:cat,name:cat}))} title={`Top Categories — Trend`} height={200}/>}
+        </>);
+      })()}
       <MonthlyTable cats={subView==="revenue"?FIT_REV_CATS:FIT_EXP_CATS} byKey={subView==="revenue"?revByKey:expByKey} selFY={selFY} months={FY_MONTHS} onEdit={cat=>openEntry(subView,cat,selFY)}/>
     </div>)}
 
@@ -1025,6 +1086,12 @@ function FitnessModule({db}){
         <h3 className="font-semibold text-slate-700">Membership & Participation KPIs</h3>
         <div className="flex gap-2"><Sel value={selFY} onChange={setSelFY} options={FY_LIST}/><Btn onClick={()=>openEntry("kpis",FIT_KPI_METRICS[0],selFY)}>+ Enter</Btn></div>
       </div>
+      {membersByFY.length>1&&(
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <TrendChart data={membersByFY} xKey="fy" keys={[{key:"activeMembers",name:"Active"},{key:"newMembers",name:"New"},{key:"cancellations",name:"Cancellations"}]} title="Membership Trends" fmt={num} height={200}/>
+          <TrendChart data={membersByFY} xKey="fy" keys={[{key:"memberVisits",name:"Member Visits"}]} title="Member Visits Trend" fmt={num} height={200}/>
+        </div>
+      )}
       <MonthlyTable cats={FIT_KPI_METRICS} byKey={kpiByKey} selFY={selFY} months={FY_MONTHS} onEdit={cat=>openEntry("kpis",cat,selFY)} fmt={num}/>
     </div>)}
 
@@ -1182,10 +1249,14 @@ const TABS=[{id:"overview",label:"Overview"},{id:"camps",label:"Camps"},{id:"clu
 
 export default function App(){
   const [tab,setTab]=useState("overview");
-  const [authed,setAuthed]=useState(false);
-  const [userName,setUserName]=useState("");
+  const [authed,setAuthed]=useState(()=>{
+    try{const n=localStorage.getItem("bgpd_user");return !!n;}catch{return false;}
+  });
+  const [userName,setUserName]=useState(()=>{
+    try{return localStorage.getItem("bgpd_user")||"";}catch{return "";}
+  });
 
-  if(!authed)return <LoginScreen onLogin={n=>{setAuthed(true);setUserName(n);}}/>;
+  if(!authed)return <LoginScreen onLogin={n=>{localStorage.setItem("bgpd_user",n);setAuthed(true);setUserName(n);}}/>;
 
   return(<div className="min-h-screen" style={{background:"#f1f5f9"}}>
     <header style={{backgroundColor:NAVY}} className="px-4 py-4 shadow-lg">
@@ -1197,7 +1268,7 @@ export default function App(){
             <div className="text-xs font-semibold tracking-widest uppercase" style={{color:BLUE}}>Rec Funds — Financial Dashboard</div>
           </div>
         </div>
-        <div className="flex items-center gap-3"><span className="text-xs text-white/60 capitalize">{userName}</span><button onClick={()=>{setAuthed(false);setUserName("");}} className="text-xs text-white/40 hover:text-white/70 transition">Sign out</button></div>
+        <div className="flex items-center gap-3"><span className="text-xs text-white/60 capitalize">{userName}</span><button onClick={()=>{try{localStorage.removeItem("bgpd_user");}catch{}setAuthed(false);setUserName("");}} className="text-xs text-white/40 hover:text-white/70 transition">Sign out</button></div>
       </div>
     </header>
     <nav className="bg-white border-b border-slate-200 shadow-sm">
