@@ -29,13 +29,13 @@ const tc=v=>v>0?"#16a34a":v<0?"#dc2626":"#94a3b8";
 const plPct=(pl,rev)=>rev&&rev>0?pct(pl/rev):"—";
 
 // ── Login screen ──────────────────────────────────────────────────────────────
-const MANAGER_PASS = "bgpd2025";
+const APPROVED_NAMES=["joe zimmermann","erika strojinc","tim beckmann","dan stanczak","amanda busch","mike terson","chuck burgess","chris eckert","brian o'malley","diana clayson"];
 function LoginScreen({onLogin}){
-  const [pass,setPass]=useState("");
+  const [name,setName]=useState("");
   const [err,setErr]=useState(false);
   function attempt(){
-    if(pass===MANAGER_PASS){onLogin();}
-    else{setErr(true);setTimeout(()=>setErr(false),2000);}
+    if(APPROVED_NAMES.includes(name.trim().toLowerCase())){onLogin(name.trim());}
+    else{setErr(true);setTimeout(()=>setErr(false),2500);}
   }
   return(
     <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{background:`linear-gradient(135deg,${NAVY} 0%,#0d2240 100%)`}}>
@@ -49,16 +49,16 @@ function LoginScreen({onLogin}){
         </div>
         <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-5">
           <div>
-            <div className="font-bold text-slate-800 text-base mb-1">Manager Access</div>
-            <div className="text-xs text-slate-400">Enter your password to continue</div>
+            <div className="font-bold text-slate-800 text-base mb-1">Welcome</div>
+            <div className="text-xs text-slate-400">Enter your name to continue</div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Password</label>
-            <input type="password" value={pass} onChange={e=>setPass(e.target.value)}
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Your Name</label>
+            <input type="text" value={name} onChange={e=>setName(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&attempt()}
               className={`w-full rounded-lg border px-4 py-3 text-sm focus:outline-none focus:ring-2 transition ${err?"border-red-400 focus:ring-red-300 bg-red-50":"border-slate-200 focus:ring-blue-300"}`}
-              placeholder="Enter password" autoFocus/>
-            {err&&<div className="text-xs text-red-500 mt-1.5 font-medium">Incorrect password. Please try again.</div>}
+              placeholder="First and last name" autoFocus/>
+            {err&&<div className="text-xs text-red-500 mt-1.5 font-medium">Name not recognized. Please check the spelling and try again.</div>}
           </div>
           <button onClick={attempt} className="w-full py-3 rounded-xl font-bold text-white text-sm transition hover:opacity-90 active:scale-95" style={{background:NAVY}}>
             Sign In
@@ -1183,8 +1183,9 @@ const TABS=[{id:"overview",label:"Overview"},{id:"camps",label:"Camps"},{id:"clu
 export default function App(){
   const [tab,setTab]=useState("overview");
   const [authed,setAuthed]=useState(false);
+  const [userName,setUserName]=useState("");
 
-  if(!authed)return <LoginScreen onLogin={()=>setAuthed(true)}/>;
+  if(!authed)return <LoginScreen onLogin={n=>{setAuthed(true);setUserName(n);}}/>;
 
   return(<div className="min-h-screen" style={{background:"#f1f5f9"}}>
     <header style={{backgroundColor:NAVY}} className="px-4 py-4 shadow-lg">
@@ -1196,7 +1197,7 @@ export default function App(){
             <div className="text-xs font-semibold tracking-widest uppercase" style={{color:BLUE}}>Rec Funds — Financial Dashboard</div>
           </div>
         </div>
-        <button onClick={()=>setAuthed(false)} className="text-xs text-white/40 hover:text-white/70 transition">Sign out</button>
+        <div className="flex items-center gap-3"><span className="text-xs text-white/60 capitalize">{userName}</span><button onClick={()=>{setAuthed(false);setUserName("");}} className="text-xs text-white/40 hover:text-white/70 transition">Sign out</button></div>
       </div>
     </header>
     <nav className="bg-white border-b border-slate-200 shadow-sm">
