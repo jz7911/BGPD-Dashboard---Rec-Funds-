@@ -16,6 +16,7 @@ const FY_MONTHS=["May","June","July","August","September","October","November","
 const REC_PL_CATS=["Rentals - All","Concessions","WSP - User Fees","Aquatics","SNP - User Fees","Golf Dome","Adult General","Adult Sports","Camps","Performing Arts","Seniors","Youth General","Youth Sports","Special Events","Tot and Child"];
 const REC_REV_CATS=["Overall Revenue","Rentals - All","Concessions","WSP - User Fees","Aquatics","Golf Dome","Adult General","Adult Sports","Camps","Performing Arts","Seniors","Youth General","Youth Sports","Special Events","Tot and Child"];
 const REC_EXP_CATS=["Personnel","Contractual Services","Commodities","Utilities","Rentals"];
+const REC_AREA_EXP_CATS=["Adult General","Adult Sports","Aquatics","Camps","Golf Dome","Performing Arts","Seniors","SNP","Special Events","Tot and Child","WSP","Youth General","Youth Sports"];
 const FIT_REV_CATS=["Overall Revenue","Memberships","Personal Training","Specialty Programs"];
 const FIT_EXP_CATS=["Personnel","Contractual Services","Commodities","Utilities","Personal Training","Specialty Programs"];
 const FIT_PL_CATS=["Personal Training","Specialty Programs"];
@@ -97,6 +98,42 @@ function Btn({onClick,children,variant="primary",small=false,disabled=false}){
 }
 
 function SubNav({views,active,onChange}){return(<div className="flex gap-1 bg-white rounded-lg shadow-sm px-3 py-2 overflow-x-auto">{views.map(([v,l])=>(<button key={v} onClick={()=>onChange(v)} className={`px-4 py-2 text-sm font-semibold rounded-lg transition whitespace-nowrap ${active===v?"text-white":"text-slate-500 hover:bg-slate-50"}`} style={active===v?{background:NAVY}:{}}>{l}</button>))}</div>);}
+
+function MultiYearChart({data,xKey,keys,title,fmt=dollar,height=220}){
+  const allFYs=Array.from(new Set(data.map(r=>r[xKey]))).sort();
+  const [years,setYears]=useState(()=>allFYs.slice(-3));
+  const filtered=data.filter(r=>years.includes(r[xKey]));
+  // For bar chart: pivot so each key becomes a series grouped by xKey value
+  // For multi-year comparison we show bars side by side per key
+  const [mode,setMode]=useState("line"); // line | bar
+  return(<div className="bg-white rounded-lg shadow-sm p-4 space-y-3">
+    <div className="flex items-center justify-between flex-wrap gap-2">
+      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">{title}</h3>
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex gap-1">{["line","bar"].map(m=><button key={m} onClick={()=>setMode(m)} className={`px-2 py-1 text-xs rounded font-semibold transition ${mode===m?"text-white":"text-slate-400 border border-slate-200 hover:bg-slate-50"}`} style={mode===m?{background:NAVY}:{}}>{m==="line"?"Line":"Bar"}</button>)}</div>
+        <div className="flex gap-1 flex-wrap">{allFYs.map(fy=><button key={fy} onClick={()=>setYears(prev=>prev.includes(fy)?prev.filter(y=>y!==fy):[...prev,fy].sort())} className={`px-2 py-1 text-xs rounded font-semibold transition ${years.includes(fy)?"text-white":"text-slate-400 border border-slate-200 hover:bg-slate-50"}`} style={years.includes(fy)?{background:NAVY}:{}}>{fy}</button>)}</div>
+      </div>
+    </div>
+    {filtered.length>0?(<ResponsiveContainer width="100%" height={height}>
+      {mode==="line"?(
+        <LineChart data={filtered} margin={{top:5,right:10,left:10,bottom:5}}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+          <XAxis dataKey={xKey} tick={{fontSize:10}}/>
+          <YAxis tick={{fontSize:10}} tickFormatter={v=>v>=1000000?`$${(v/1000000).toFixed(1)}M`:v>=1000?`$${(v/1000).toFixed(0)}k`:String(Math.round(v))}/>
+          <Tooltip content={<Tip fmt={fmt}/>}/><Legend/>
+          {keys.map((k,i)=><Line key={k.key} type="monotone" dataKey={k.key} name={k.name||k.key} stroke={CC[i]} strokeWidth={2} dot={{r:3}} connectNulls/>)}
+        </LineChart>
+      ):(
+        <BarChart data={filtered} margin={{top:5,right:10,left:10,bottom:5}}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+          <XAxis dataKey={xKey} tick={{fontSize:10}}/>
+          <YAxis tick={{fontSize:10}} tickFormatter={v=>v>=1000000?`$${(v/1000000).toFixed(1)}M`:v>=1000?`$${(v/1000).toFixed(0)}k`:String(Math.round(v))}/>
+          <Tooltip content={<Tip fmt={fmt}/>}/><Legend/>
+          {keys.map((k,i)=><Bar key={k.key} dataKey={k.key} name={k.name||k.key} fill={CC[i]}/>)}
+        </BarChart>
+      )}
+    </ResponsiveContainer>):<div className="text-xs text-slate-400 text-center py-8">Select years above to display data</div>}
+  </div>);}
 
 function TrendChart({data,xKey,keys,title,fmt=dollar,height=200}){return(<div className="bg-white rounded-lg shadow-sm p-4"><h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">{title}</h3><ResponsiveContainer width="100%" height={height}><LineChart data={data} margin={{top:5,right:10,left:10,bottom:5}}><CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/><XAxis dataKey={xKey} tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} tickFormatter={v=>v>=1000000?`$${(v/1000000).toFixed(1)}M`:v>=1000?`$${(v/1000).toFixed(0)}k`:String(Math.round(v))}/><Tooltip content={<Tip fmt={fmt}/>}/><Legend/>{keys.map((k,i)=><Line key={k.key} type="monotone" dataKey={k.key} name={k.name||k.key} stroke={CC[i]} strokeWidth={2} dot={{r:3}} connectNulls/>)}</LineChart></ResponsiveContainer></div>);}
 
@@ -323,14 +360,14 @@ function CampsModule({db}){
       <KCard label="Total Enrollment" value={latest?num(latest.enrollment):"—"} sub={latest?`${latest.year} season`:""} accent={NAVY} trend={latest&&prior&&prior.enrollment>0?((latest.enrollment-prior.enrollment)/prior.enrollment)*100:null}/>
       <KCard label="Total Revenue" value={latest?dollar(latest.revenue):"—"} sub={latest?`${latest.year} season`:""} accent={GOLD} trend={latest&&prior&&prior.revenue>0?((latest.revenue-prior.revenue)/prior.revenue)*100:null}/>
       <KCard label="Total Expenses" value={latest?dollar(latest.expenses):"—"} sub={latest?`${latest.year}`:""} accent="#64748b"/>
-      <KCard label="Net P/(L)" value={latest?dollar(latest.profit_loss):"—"} sub={latest&&latest.revenue>0?`Margin: ${pct(latest.profit_loss/latest.revenue)}`:""} accent={latest&&latest.profit_loss>=0?"#22c55e":"#ef4444"}/>
+      <KCard label="Net P/(L)" value={latest?dollar(latest.profit_loss):"—"} sub={latest&&latest.revenue>0?`${pct(latest.profit_loss/latest.revenue)} margin · ${latest.year}`:""} accent={latest&&latest.profit_loss>=0?"#22c55e":"#ef4444"}/>
     </div>
     <SubNav views={subViews} active={subView} onChange={setSubView}/>
 
     {subView==="overview"&&(<div className="space-y-5">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {portfolio.length>1&&<TrendChart data={portfolio} xKey="year" keys={[{key:"enrollment",name:"Total Enrollment"}]} title="Portfolio Enrollment by Year" fmt={v=>num(v)} height={200}/>}
-        {revExpByYear.length>1&&<TrendChart data={revExpByYear} xKey="year" keys={[{key:"revenue",name:"Revenue"},{key:"expenses",name:"Expenses"},{key:"profit_loss",name:"P/L"}]} title="Revenue, Expenses & P/L" height={200}/>}
+        {portfolio.length>1&&<MultiYearChart data={portfolio} xKey="year" keys={[{key:"enrollment",name:"Enrollment"}]} title="Portfolio Enrollment by Year" fmt={v=>num(v)} height={220}/>}
+        {revExpByYear.length>1&&<MultiYearChart data={revExpByYear} xKey="year" keys={[{key:"revenue",name:"Revenue"},{key:"expenses",name:"Expenses"},{key:"profit_loss",name:"P/L"}]} title="Revenue, Expenses & P/L" height={220}/>}
       </div>
       {expMix.length>0&&(
         <div className="bg-white rounded-lg shadow-sm p-4">
@@ -418,23 +455,28 @@ function CampsModule({db}){
 
     {subView==="overview"&&(<div className="bg-white rounded-lg shadow-sm overflow-hidden mt-2">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <h3 className="font-bold text-slate-700 text-sm">All Camps — Click to view history</h3>
+        <h3 className="font-bold text-slate-700 text-sm">All Camps by Year</h3></div><div className="px-4 py-1 border-b border-slate-100 flex items-center justify-end gap-2 text-xs text-slate-400">Showing: <Sel value={selYear} onChange={v=>setSY(parseInt(v))} options={CAMP_YEARS}/>
       </div>
       <table className="w-full text-sm">
         <thead><tr className="bg-slate-50 text-xs text-slate-400 uppercase tracking-wider">
           {["Camp","Year","Enrollment","Revenue","Expenses","P/(L)","Margin","YoY",""].map(h=><th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>)}
         </tr></thead>
-        <tbody>{campSum.map((c,i)=>(<tr key={c.camp} className={`border-t border-slate-50 hover:bg-slate-50 ${i%2===0?"bg-white":"bg-slate-50/40"}`}>
-          <td className="px-3 py-2.5"><button onClick={()=>{setSC(c.camp);setView("detail");}} className="font-semibold text-slate-700 hover:text-blue-600 hover:underline text-left">{c.display}</button></td>
-          <td className="px-3 py-2.5 text-slate-400">{c.latest?.year||"—"}</td>
-          <td className="px-3 py-2.5 font-mono">{c.latest?.enrollment>0?num(c.latest.enrollment):"—"}</td>
-          <td className="px-3 py-2.5 font-mono">{c.latest?.revenue>0?dollar(c.latest.revenue):"—"}</td>
-          <td className="px-3 py-2.5 font-mono">{c.latest?.expenses>0?dollar(c.latest.expenses):"—"}</td>
-          <td className={`px-3 py-2.5 font-mono font-semibold ${(c.latest?.profit_loss||0)>=0?"text-green-700":"text-red-600"}`}>{c.latest?.profit_loss!=null?dollar(c.latest.profit_loss):"—"}</td>
-          <td className="px-3 py-2.5 font-mono text-slate-500">{c.latest?.revenue>0&&c.latest?.profit_loss!=null?pct(c.latest.profit_loss/c.latest.revenue):"—"}</td>
-          <td className="px-3 py-2.5">{c.enrTrend!=null&&<span className="text-xs font-semibold" style={{color:tc(c.enrTrend)}}>{c.enrTrend>=0?"↑":"↓"}{Math.abs(c.enrTrend).toFixed(1)}%</span>}</td>
-          <td className="px-3 py-2.5"><Btn onClick={()=>openEntry(c.camp,new Date().getFullYear())} variant="ghost" small>+ Add</Btn></td>
-        </tr>))}</tbody>
+        <tbody>{campSum.map((c,i)=>{
+          const yr=byKey[`${c.camp}__${selYear}`]||null;
+          const prYr=byKey[`${c.camp}__${selYear-1}`]||null;
+          const enrTrendYr=yr&&prYr&&prYr.enrollment>0?((yr.enrollment-prYr.enrollment)/prYr.enrollment)*100:null;
+          return(<tr key={c.camp} className={`border-t border-slate-50 hover:bg-slate-50 ${i%2===0?"bg-white":"bg-slate-50/40"} ${!yr?"opacity-30":""}`}>
+            <td className="px-3 py-2.5"><button onClick={()=>{setSC(c.camp);setView("detail");}} className="font-semibold text-slate-700 hover:text-blue-600 hover:underline text-left">{c.display}</button></td>
+            <td className="px-3 py-2.5 text-slate-400">{selYear}</td>
+            <td className="px-3 py-2.5 font-mono">{yr?.enrollment>0?num(yr.enrollment):"—"}</td>
+            <td className="px-3 py-2.5 font-mono">{yr?.revenue>0?dollar(yr.revenue):"—"}</td>
+            <td className="px-3 py-2.5 font-mono">{yr?.expenses>0?dollar(yr.expenses):"—"}</td>
+            <td className={`px-3 py-2.5 font-mono font-semibold ${(yr?.profit_loss||0)>=0?"text-green-700":"text-red-600"}`}>{yr?.profit_loss!=null?dollar(yr.profit_loss):"—"}</td>
+            <td className="px-3 py-2.5 font-mono text-slate-500">{yr?.revenue>0&&yr?.profit_loss!=null?pct(yr.profit_loss/yr.revenue):"—"}</td>
+            <td className="px-3 py-2.5">{enrTrendYr!=null&&<span className="text-xs font-semibold" style={{color:tc(enrTrendYr)}}>{enrTrendYr>=0?"↑":"↓"}{Math.abs(enrTrendYr).toFixed(1)}%</span>}</td>
+            <td className="px-3 py-2.5"><Btn onClick={()=>openEntry(c.camp,selYear)} variant="ghost" small>+ Add</Btn></td>
+          </tr>);
+        })}</tbody>
       </table>
     </div>)}
   </div>);}
@@ -607,8 +649,8 @@ function ClubhouseModule({db}){
       <KCard label="Total P/(L)" value={latestPL?dollar(latestPL.profit_loss):"—"} sub={latestPL?.revenue>0&&latestPL?.profit_loss!=null?`Margin: ${pct(latestPL.profit_loss/latestPL.revenue)}`:""} accent={NAVY}/>
     </div>
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {portfolio.length>1&&<TrendChart data={portfolio} xKey="year" keys={[{key:"total",name:"Total Enrollment"}]} title="Portfolio Enrollment by Year" fmt={v=>num(v)} height={200}/>}
-      {portfolio.length>1&&<TrendChart data={portfolio} xKey="year" keys={[{key:"revenue",name:"Revenue"},{key:"profit_loss",name:"P/L"}]} title="Revenue & P/L by Year" height={200}/>}
+      {portfolio.length>1&&<MultiYearChart data={portfolio} xKey="year" keys={[{key:"total",name:"Enrollment"},{key:"revenue",name:"Revenue"},{key:"profit_loss",name:"P/L"}]} title="Portfolio Enrollment & Financials" height={220}/>}
+
     </div>
     <div className="bg-white rounded-lg shadow-sm p-4 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -626,19 +668,23 @@ function ClubhouseModule({db}){
       </ResponsiveContainer>
     </div>
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100"><h3 className="font-bold text-slate-700 text-sm">Site Summary — Latest Year</h3></div>
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2"><h3 className="font-bold text-slate-700 text-sm">Site Summary by Year</h3><div className="flex items-center gap-2 text-xs text-slate-400">Showing: <Sel value={entryYear} onChange={v=>setEY(parseInt(v))} options={CB_YEARS}/></div></div>
       <table className="w-full text-sm">
         <thead><tr className="bg-slate-50 text-xs text-slate-400 uppercase tracking-wider">{["Site","Year","Avg Enrollment","Revenue","Expenses","P/(L)","Margin",""].map(h=><th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>)}</tr></thead>
-        <tbody>{latestData.map((r,i)=>(<tr key={r.site} className={`border-t border-slate-50 hover:bg-slate-50 ${i%2===0?"bg-white":"bg-slate-50/40"}`}>
-          <td className="px-3 py-2.5"><button onClick={()=>{setSite(r.site);setView("detail");}} className="font-semibold text-slate-700 hover:text-blue-600 hover:underline">{r.site}</button></td>
-          <td className="px-3 py-2.5 text-slate-400">{r.year||"—"}</td>
-          <td className="px-3 py-2.5 font-mono">{r.avg!=null?r.avg.toFixed(1):"—"}</td>
-          <td className="px-3 py-2.5 font-mono">{r.fin?.revenue>0?dollar(r.fin.revenue):"—"}</td>
-          <td className="px-3 py-2.5 font-mono">{r.fin?.expenses>0?dollar(r.fin.expenses):"—"}</td>
-          <td className={`px-3 py-2.5 font-mono font-semibold ${(r.fin?.profit_loss||0)>=0?"text-green-700":"text-red-600"}`}>{r.fin?.profit_loss!=null?dollar(r.fin.profit_loss):"—"}</td>
-          <td className="px-3 py-2.5 font-mono text-slate-500">{r.fin?.revenue>0&&r.fin?.profit_loss!=null?pct(r.fin.profit_loss/r.fin.revenue):"—"}</td>
-          <td className="px-3 py-2.5"><Btn onClick={()=>openEntry(r.site,new Date().getFullYear())} variant="ghost" small>+ Enter</Btn></td>
-        </tr>))}</tbody>
+        <tbody>{CB_SITES.map((site,i)=>{
+          const avg=siteAvg[site]?.[entryYear];
+          const fin=finByKey[`${site}__${entryYear}`]||null;
+          return(<tr key={site} className={`border-t border-slate-50 hover:bg-slate-50 ${i%2===0?"bg-white":"bg-slate-50/40"} ${!avg&&!fin?"opacity-30":""}`}>
+            <td className="px-3 py-2.5"><button onClick={()=>{setSite(site);setView("detail");}} className="font-semibold text-slate-700 hover:text-blue-600 hover:underline">{site}</button></td>
+            <td className="px-3 py-2.5 text-slate-400">{entryYear}</td>
+            <td className="px-3 py-2.5 font-mono">{avg!=null?avg.toFixed(1):"—"}</td>
+            <td className="px-3 py-2.5 font-mono">{fin?.revenue>0?dollar(fin.revenue):"—"}</td>
+            <td className="px-3 py-2.5 font-mono">{fin?.expenses>0?dollar(fin.expenses):"—"}</td>
+            <td className={`px-3 py-2.5 font-mono font-semibold ${(fin?.profit_loss||0)>=0?"text-green-700":"text-red-600"}`}>{fin?.profit_loss!=null?dollar(fin.profit_loss):"—"}</td>
+            <td className="px-3 py-2.5 font-mono text-slate-500">{fin?.revenue>0&&fin?.profit_loss!=null?pct(fin.profit_loss/fin.revenue):"—"}</td>
+            <td className="px-3 py-2.5"><Btn onClick={()=>openEntry(site,entryYear)} variant="ghost" small>+ Enter</Btn></td>
+          </tr>);
+        })}</tbody>
       </table>
     </div>
   </div>);}
@@ -762,7 +808,7 @@ function RecreationModule({db}){
       })()}
       {overviewByFY.length>1&&(
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TrendChart data={overviewByFY} xKey="fy" keys={[{key:"revenue",name:"Revenue"},{key:"profit_loss",name:"P/L"}]} title="Revenue & Overall P/L by Fiscal Year" height={220}/>
+          <MultiYearChart data={overviewByFY} xKey="fy" keys={[{key:"revenue",name:"Revenue"},{key:"profit_loss",name:"P/L"}]} title="Revenue & Overall P/L by Fiscal Year" height={220}/>
           <div className="bg-white rounded-lg shadow-sm p-4">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">P/L Margin % by Fiscal Year</h3>
             <ResponsiveContainer width="100%" height={180}>
@@ -858,14 +904,15 @@ function RecreationModule({db}){
       );})()}
       <MonthlyTable cats={REC_REV_CATS} byKey={revByKey} selFY={selFY} months={FY_MONTHS} onEdit={cat=>openEntry("revenue",cat,selFY)}/>
     </div>)}
-    {subView==="expenses"&&(<div className="space-y-4">
+    {subView==="expenses"&&(<div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-semibold text-slate-700">Expenses by Category — {selFY}</h3>
+        <h3 className="font-semibold text-slate-700">Expenses — {selFY}</h3>
         <Sel value={selFY} onChange={setSelFY} options={FY_LIST}/>
       </div>
+      {/* Overall expense category chart */}
       {(()=>{const exData=REC_EXP_CATS.map(cat=>{const r=expByKey[`${cat.trim()}__${selFY}`];return r?.total?{category:cat.trim(),expenses:r.total}:null;}).filter(Boolean).sort((a,b)=>b.expenses-a.expenses);return exData.length>0&&(
         <div className="bg-white rounded-lg shadow-sm p-4">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Expenses by Category — {selFY}</h3>
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Overall Expense Categories — {selFY}</h3>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={exData} margin={{top:5,right:10,left:10,bottom:10}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
@@ -877,6 +924,24 @@ function RecreationModule({db}){
         </div>
       );})()}
       <MonthlyTable cats={REC_EXP_CATS} byKey={expByKey} selFY={selFY} months={FY_MONTHS} onEdit={cat=>openEntry("expenses",cat,selFY)}/>
+      {/* Per-area expense section */}
+      <div className="mt-4">
+        <h3 className="font-semibold text-slate-700 mb-3">Expenses by Program Area — {selFY}</h3>
+        {(()=>{const areaData=REC_AREA_EXP_CATS.map(cat=>{const r=expByKey[`${cat.trim()}__${selFY}`];return r?.total?{category:cat.trim(),expenses:r.total}:null;}).filter(Boolean).sort((a,b)=>b.expenses-a.expenses);return areaData.length>0&&(
+          <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Program Area Expenses — {selFY}</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={areaData} margin={{top:5,right:10,left:10,bottom:80}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+                <XAxis dataKey="category" tick={{fontSize:9}} angle={-40} textAnchor="end" interval={0}/>
+                <YAxis tick={{fontSize:10}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
+                <Tooltip content={<Tip/>}/><Bar dataKey="expenses" name="Expenses" fill={NAVY}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );})()}
+        <MonthlyTable cats={REC_AREA_EXP_CATS} byKey={expByKey} selFY={selFY} months={FY_MONTHS} onEdit={cat=>openEntry("expenses",cat,selFY)}/>
+      </div>
     </div>)}
   </div>);}
 
@@ -951,31 +1016,54 @@ function FitnessModule({db}){
     setForm(f);setShowEntry(true);
   }
 
-  async function saveEntry(){
+  async function saveEntry(plRowType){
     setSaving(true);
-    const table=entryType==="revenue"?"fitness_revenue":entryType==="expenses"?"fitness_expenses":"fitness_kpis";
+    const isPL=entryType==="pl_detail";
+    const table=isPL?"fitness_pl":entryType==="revenue"?"fitness_revenue":entryType==="expenses"?"fitness_expenses":"fitness_kpis";
     const isKPI=entryType==="kpis";
-    const row=isKPI?{metric:entryCat,fiscal_year:entryFY,notes:form.notes||""}:{category:entryCat,fiscal_year:entryFY,notes:form.notes||""};
+    const row=isPL?{category:entryCat,fiscal_year:entryFY,type:plRowType||"revenue"}:
+      isKPI?{metric:entryCat,fiscal_year:entryFY,notes:form.notes||""}:
+      {category:entryCat,fiscal_year:entryFY,notes:form.notes||""};
     let total=0;FY_MONTHS.forEach(m=>{row[m.toLowerCase()]=form[m]??null;if(form[m])total+=form[m];});row.total=total;
-    await db.from(table).upsert(row,{onConflict:isKPI?"metric,fiscal_year":"category,fiscal_year"});
+    const conflict=isPL?"category,fiscal_year,type":isKPI?"metric,fiscal_year":"category,fiscal_year";
+    await db.from(table).upsert(row,{onConflict:conflict});
+    // If saving P/L revenue or expenses, auto-compute profit_loss row
+    if(isPL){
+      const rev=plRowType==="revenue"?total:(plByKey[`${entryCat}__${entryFY}__revenue`]?.total||0);
+      const exp=plRowType==="expenses"?total:(plByKey[`${entryCat}__${entryFY}__expenses`]?.total||0);
+      const plRow={category:entryCat,fiscal_year:entryFY,type:"profit_loss",total:rev-exp};
+      FY_MONTHS.forEach(m=>{
+        const rv=plRowType==="revenue"?(form[m]||0):(plByKey[`${entryCat}__${entryFY}__revenue`]?.[m.toLowerCase()]||0);
+        const ex=plRowType==="expenses"?(form[m]||0):(plByKey[`${entryCat}__${entryFY}__expenses`]?.[m.toLowerCase()]||0);
+        plRow[m.toLowerCase()]=rv-ex;
+      });
+      await db.from("fitness_pl").upsert(plRow,{onConflict:"category,fiscal_year,type"});
+    }
     setSaving(false);setShowEntry(false);load();
   }
 
   if(showEntry){
-    const cats=entryType==="revenue"?FIT_REV_CATS:entryType==="expenses"?FIT_EXP_CATS:FIT_KPI_METRICS;
+    const isPL=entryType==="pl_detail";
+    const cats=entryType==="revenue"?FIT_REV_CATS:entryType==="expenses"?FIT_EXP_CATS:isPL?FIT_PL_CATS:FIT_KPI_METRICS;
     const fmt=entryType==="kpis"?num:dollar;
+    const plRowType=form._plType||"revenue";
     return(<div className="space-y-5">
       <button onClick={()=>setShowEntry(false)} className="text-sm text-slate-400 hover:text-slate-600">← Back</button>
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div><h2 className="font-bold text-slate-800 text-lg">Enter {entryType==="revenue"?"Revenue":entryType==="expenses"?"Expenses":"KPI"}</h2><p className="text-sm text-slate-400">{entryCat} · {entryFY}</p></div>
-        <div className="flex gap-2"><Sel value={entryCat} onChange={setEC} options={cats}/><Sel value={entryFY} onChange={setEFY} options={FY_LIST}/></div>
+        <div><h2 className="font-bold text-slate-800 text-lg">Enter {isPL?"P/L Detail":entryType==="revenue"?"Revenue":entryType==="expenses"?"Expenses":"KPI"}</h2><p className="text-sm text-slate-400">{entryCat} · {entryFY}</p></div>
+        <div className="flex gap-2 flex-wrap"><Sel value={entryCat} onChange={v=>{setEC(v);}} options={cats}/><Sel value={entryFY} onChange={setEFY} options={FY_LIST}/></div>
       </div>
+      {isPL&&(
+        <div className="flex gap-2">
+          {["revenue","expenses"].map(t=><button key={t} onClick={()=>setForm(f=>({...f,_plType:t}))} className={`px-4 py-2 text-sm font-semibold rounded-lg transition ${plRowType===t?"text-white":"text-slate-500 border border-slate-200 hover:bg-slate-50"}`} style={plRowType===t?{background:NAVY}:{}}>{t==="revenue"?"Revenue":"Expenses"}</button>)}
+        </div>
+      )}
       <div className="bg-white rounded-xl shadow-sm p-5 space-y-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {FY_MONTHS.map(month=>(<div key={month}><label className="block text-xs font-semibold text-slate-500 mb-1">{month}</label><NumIn value={form[month]} onChange={v=>setForm(f=>({...f,[month]:v}))}/></div>))}
         </div>
         <div className="rounded-lg px-4 py-3 text-sm bg-slate-50 border border-slate-100">Total: <span className="font-bold">{fmt(FY_MONTHS.reduce((a,m)=>a+(form[m]||0),0))}</span></div>
-        <div className="flex justify-end gap-3"><Btn onClick={()=>setShowEntry(false)} variant="outline">Cancel</Btn><button onClick={saveEntry} disabled={saving} className="px-5 py-2 text-sm font-bold text-white rounded-lg disabled:opacity-40" style={{background:NAVY}}>{saving?"Saving…":"Save"}</button></div>
+        <div className="flex justify-end gap-3"><Btn onClick={()=>setShowEntry(false)} variant="outline">Cancel</Btn><button onClick={()=>saveEntry(isPL?plRowType:null)} disabled={saving} className="px-5 py-2 text-sm font-bold text-white rounded-lg disabled:opacity-40" style={{background:NAVY}}>{saving?"Saving…":"Save"}</button></div>
       </div>
     </div>);}
 
@@ -1000,7 +1088,7 @@ function FitnessModule({db}){
       </div>
       {revByFY.length>1&&(
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TrendChart data={revByFY} xKey="fy" keys={[{key:"total",name:"Total Revenue"},{key:"profit_loss",name:"Overall P/L"}]} title="Revenue & P/L Trend" height={220}/>
+          <MultiYearChart data={revByFY} xKey="fy" keys={[{key:"total",name:"Total Revenue"},{key:"profit_loss",name:"Overall P/L"}]} title="Revenue & P/L Trend" height={220}/>
           <div className="bg-white rounded-lg shadow-sm p-4">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">P/L Margin % by Fiscal Year</h3>
             <ResponsiveContainer width="100%" height={180}>
@@ -1032,7 +1120,7 @@ function FitnessModule({db}){
       )}
       {membersByFY.length>1&&(
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TrendChart data={membersByFY} xKey="fy" keys={[{key:"activeMembers",name:"Active Members"}]} title="Active Members Trend" fmt={num} height={200}/>
+          <MultiYearChart data={membersByFY} xKey="fy" keys={[{key:"activeMembers",name:"Active Members"},{key:"newMembers",name:"New"},{key:"cancellations",name:"Cancellations"}]} title="Membership Trends" fmt={num} height={220}/>
           <TrendChart data={membersByFY} xKey="fy" keys={[{key:"newMembers",name:"New Members"},{key:"cancellations",name:"Cancellations"}]} title="New vs Cancellations" fmt={num} height={200}/>
         </div>
       )}
@@ -1088,14 +1176,29 @@ function FitnessModule({db}){
       </div>
       {membersByFY.length>1&&(
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TrendChart data={membersByFY} xKey="fy" keys={[{key:"activeMembers",name:"Active"},{key:"newMembers",name:"New"},{key:"cancellations",name:"Cancellations"}]} title="Membership Trends" fmt={num} height={200}/>
-          <TrendChart data={membersByFY} xKey="fy" keys={[{key:"memberVisits",name:"Member Visits"}]} title="Member Visits Trend" fmt={num} height={200}/>
+          <MultiYearChart data={membersByFY} xKey="fy" keys={[{key:"activeMembers",name:"Active"},{key:"newMembers",name:"New"},{key:"cancellations",name:"Cancellations"}]} title="Membership Trends" fmt={num} height={220}/>
+          <MultiYearChart data={membersByFY} xKey="fy" keys={[{key:"memberVisits",name:"Member Visits"}]} title="Member Visits Trend" fmt={num} height={220}/>
         </div>
       )}
+      {(()=>{
+        const programKPIData=FY_LIST.map(fy=>{
+          const ge=kpiByKey[`Group Ex Numbers__${fy}`];
+          const pt=kpiByKey[`Personal Training__${fy}`];
+          const rf=kpiByKey[`Reformer Training__${fy}`];
+          if(!ge&&!pt&&!rf) return null;
+          return{fy,groupEx:ge?.total||null,personalTraining:pt?.total||null,reformer:rf?.total||null};
+        }).filter(Boolean);
+        return programKPIData.length>1&&(
+          <MultiYearChart data={programKPIData} xKey="fy" keys={[{key:"groupEx",name:"Group Ex"},{key:"personalTraining",name:"Personal Training"},{key:"reformer",name:"Reformer Training"}]} title="Program Participation Counts" fmt={num} height={220}/>
+        );
+      })()}
       <MonthlyTable cats={FIT_KPI_METRICS} byKey={kpiByKey} selFY={selFY} months={FY_MONTHS} onEdit={cat=>openEntry("kpis",cat,selFY)} fmt={num}/>
     </div>)}
 
     {subView==="pl"&&(<div className="space-y-6">
+      <div className="flex justify-end">
+        <Btn onClick={()=>{setET("pl_detail");setEC(FIT_PL_CATS[0]);setEFY(latestFY);const f={_plType:"revenue",notes:""};FY_MONTHS.forEach(m=>{f[m]=null;});setForm(f);setShowEntry(true);}}>+ Enter P/L Data</Btn>
+      </div>
       {/* Overall P/L table */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100"><h3 className="font-bold text-slate-700 text-sm">Overall P/L by Fiscal Year</h3></div>
