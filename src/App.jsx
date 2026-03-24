@@ -356,12 +356,20 @@ function CampsModule({db}){
   const subViews=[["overview","Overview"],["pl","P/L Summary"],["expenses","Expense Detail"]];
   return(<div className="space-y-6">
     <div className="flex items-center justify-between"><h2 className="font-bold text-slate-800 text-base">Camps — Portfolio Overview</h2></div>
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <KCard label="Total Enrollment" value={latest?num(latest.enrollment):"—"} sub={latest?`${latest.year} season`:""} accent={NAVY} trend={latest&&prior&&prior.enrollment>0?((latest.enrollment-prior.enrollment)/prior.enrollment)*100:null}/>
-      <KCard label="Total Revenue" value={latest?dollar(latest.revenue):"—"} sub={latest?`${latest.year} season`:""} accent={GOLD} trend={latest&&prior&&prior.revenue>0?((latest.revenue-prior.revenue)/prior.revenue)*100:null}/>
-      <KCard label="Total Expenses" value={latest?dollar(latest.expenses):"—"} sub={latest?`${latest.year}`:""} accent="#64748b"/>
-      <KCard label="Net P/(L)" value={latest?dollar(latest.profit_loss):"—"} sub={latest&&latest.revenue>0?`${pct(latest.profit_loss/latest.revenue)} margin · ${latest.year}`:""} accent={latest&&latest.profit_loss>=0?"#22c55e":"#ef4444"}/>
+    <div className="flex items-center justify-between flex-wrap gap-2">
+      <h3 className="font-semibold text-slate-700 text-sm">Overview — {selYear}</h3>
+      <Sel value={selYear} onChange={v=>setSY(parseInt(v))} options={[...CAMP_YEARS].reverse()}/>
     </div>
+    {(()=>{
+      const sel=portfolio.find(r=>r.year===selYear)||null;
+      const prev=portfolio.find(r=>r.year===selYear-1)||null;
+      return(<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KCard label="Total Enrollment" value={sel?num(sel.enrollment):"—"} sub={`${selYear} season`} accent={NAVY} trend={sel&&prev&&prev.enrollment>0?((sel.enrollment-prev.enrollment)/prev.enrollment)*100:null}/>
+        <KCard label="Total Revenue" value={sel?dollar(sel.revenue):"—"} sub={`${selYear} season`} accent={GOLD} trend={sel&&prev&&prev.revenue>0?((sel.revenue-prev.revenue)/prev.revenue)*100:null}/>
+        <KCard label="Total Expenses" value={sel?dollar(sel.expenses):"—"} sub={`${selYear}`} accent="#64748b"/>
+        <KCard label="Net P/(L)" value={sel?dollar(sel.profit_loss):"—"} sub={sel&&sel.revenue>0?`${pct(sel.profit_loss/sel.revenue)} margin`:""} accent={sel&&sel.profit_loss>=0?"#22c55e":"#ef4444"}/>
+      </div>);
+    })()}
     <SubNav views={subViews} active={subView} onChange={setSubView}/>
 
     {subView==="overview"&&(<div className="space-y-5">
@@ -642,12 +650,23 @@ function ClubhouseModule({db}){
   const latestPL=portfolio[portfolio.length-1];
   return(<div className="space-y-6">
     <div className="flex items-center justify-between"><h2 className="font-bold text-slate-800 text-base">Clubhouse — All Sites</h2></div>
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <KCard label="Combined Avg Enrollment" value={num(Math.round(latestData.reduce((a,r)=>a+(r.avg||0),0)))} sub="All sites" accent={NAVY}/>
-      <KCard label="Sites" value={CB_SITES.length} accent={GOLD}/>
-      <KCard label="Total Revenue" value={latestPL?.revenue>0?dollar(latestPL.revenue):"—"} sub={`${latestPL?.year||""}`} accent="#22c55e"/>
-      <KCard label="Total P/(L)" value={latestPL?dollar(latestPL.profit_loss):"—"} sub={latestPL?.revenue>0&&latestPL?.profit_loss!=null?`Margin: ${pct(latestPL.profit_loss/latestPL.revenue)}`:""} accent={NAVY}/>
+    <div className="flex items-center justify-between flex-wrap gap-2">
+      <h3 className="font-semibold text-slate-700 text-sm">Overview — {entryYear}</h3>
+      <Sel value={entryYear} onChange={v=>setEY(parseInt(v))} options={[...CB_YEARS].reverse()}/>
     </div>
+    {(()=>{
+      const yrAvg=CB_SITES.map(s=>siteAvg[s]?.[entryYear]).filter(v=>v!=null);
+      const yrRev=CB_SITES.reduce((a,s)=>{const f=finByKey[`${s}__${entryYear}`];return a+(f?.revenue||0);},0);
+      const yrPL=CB_SITES.reduce((a,s)=>{const f=finByKey[`${s}__${entryYear}`];return a+(f?.profit_loss||0);},0);
+      const yrExp=CB_SITES.reduce((a,s)=>{const f=finByKey[`${s}__${entryYear}`];return a+(f?.expenses||0);},0);
+      const totalAvgEnr=yrAvg.reduce((a,b)=>a+b,0);
+      return(<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KCard label="Combined Avg Enrollment" value={yrAvg.length>0?num(Math.round(totalAvgEnr)):"—"} sub={`${entryYear} · ${yrAvg.length} sites reporting`} accent={NAVY}/>
+        <KCard label="Sites" value={CB_SITES.length} sub="Active locations" accent={GOLD}/>
+        <KCard label="Total Revenue" value={yrRev>0?dollar(yrRev):"—"} sub={`${entryYear}`} accent="#22c55e"/>
+        <KCard label="Total P/(L)" value={yrRev>0?dollar(yrPL):"—"} sub={yrRev>0&&yrPL!=null?`Margin: ${pct(yrPL/yrRev)}`:"—"} accent={yrPL>=0?"#22c55e":"#ef4444"}/>
+      </div>);
+    })()}
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {portfolio.length>1&&<MultiYearChart data={portfolio} xKey="year" keys={[{key:"total",name:"Enrollment"},{key:"revenue",name:"Revenue"},{key:"profit_loss",name:"P/L"}]} title="Portfolio Enrollment & Financials" height={220}/>}
 
@@ -796,14 +815,19 @@ function RecreationModule({db}){
 
     {subView==="overview"&&(<div className="space-y-5">
       {/* P/L Summary cards */}
-      {plOvByKey[latestFY]&&(()=>{
-        const ov=plOvByKey[latestFY];
-        const rev=revData.find(r=>r.fiscal_year===latestFY&&r.category.trim()==="Overall Revenue");
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="font-semibold text-slate-700 text-sm">Overview — {selFY}</h3>
+        <Sel value={selFY} onChange={setSelFY} options={[...FY_LIST].reverse().filter(fy=>plOvByKey[fy]||revData.some(r=>r.fiscal_year===fy))}/>
+      </div>
+      {(()=>{
+        const ov=plOvByKey[selFY];
+        const rev=revData.find(r=>r.fiscal_year===selFY&&r.category.trim()==="Overall Revenue");
+        if(!ov&&!rev) return null;
         return(<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <KCard label="Total Revenue" value={rev?.total?dollar(rev.total):"—"} sub={latestFY} accent={NAVY}/>
-          <KCard label="Overall P/(L)" value={dollar(ov.profit_loss)} sub={rev?.total>0?`Margin: ${pct(ov.profit_loss/rev.total)}`:latestFY} accent={(ov.profit_loss||0)>=0?"#22c55e":"#ef4444"}/>
+          <KCard label="Total Revenue" value={rev?.total?dollar(rev.total):"—"} sub={selFY} accent={NAVY}/>
+          <KCard label="Overall P/(L)" value={ov?dollar(ov.profit_loss):"—"} sub={ov&&rev?.total>0?`Margin: ${pct(ov.profit_loss/rev.total)}`:selFY} accent={ov?(ov.profit_loss||0)>=0?"#22c55e":"#ef4444":NAVY}/>
           <KCard label="Best Area" value={plByArea.filter(r=>r.total!=null).sort((a,b)=>(b.total||0)-(a.total||0))[0]?.category||"—"} sub="Highest P/L" accent={GOLD}/>
-          <KCard label="Areas Profitable" value={`${plByArea.filter(r=>r.total>0).length} / ${plByArea.filter(r=>r.total!=null).length}`} sub={latestFY} accent="#22c55e"/>
+          <KCard label="Areas Profitable" value={`${plByArea.filter(r=>r.total>0).length} / ${plByArea.filter(r=>r.total!=null).length}`} sub={selFY} accent="#22c55e"/>
         </div>);
       })()}
       {overviewByFY.length>1&&(
@@ -1080,12 +1104,24 @@ function FitnessModule({db}){
     <SubNav views={subViews} active={subView} onChange={setSubView}/>
 
     {subView==="overview"&&(<div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KCard label="Total Revenue" value={latestRev?dollar(latestRev.total):"—"} sub={latestFY} accent={NAVY} trend={latestRev&&priorRev&&priorRev.total?((latestRev.total-priorRev.total)/priorRev.total)*100:null}/>
-        <KCard label="Overall P/(L)" value={latestOv?dollar(latestOv.profit_loss):"—"} sub={latestOv&&latestRev?.total?`Margin: ${pct(latestOv.profit_loss/latestRev.total)}`:latestFY} accent={(latestOv?.profit_loss||0)>=0?"#22c55e":"#ef4444"}/>
-        <KCard label="Active Members" value={latestMem?num(latestMem.activeMembers):"—"} sub={latestFY} accent={GOLD} trend={latestMem&&priorMem&&priorMem.activeMembers?((latestMem.activeMembers-priorMem.activeMembers)/priorMem.activeMembers)*100:null}/>
-        <KCard label="New Members" value={latestMem?num(latestMem.newMembers):"—"} sub={latestFY} accent="#22c55e"/>
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+        <h3 className="font-semibold text-slate-700 text-sm">Overview — {selFY}</h3>
+        <Sel value={selFY} onChange={setSelFY} options={FY_LIST.filter(fy=>revByKey[`Overall Revenue__${fy}`]||(plOvByKey[fy]&&plOvByKey[fy].profit_loss!==0)).reverse()}/>
       </div>
+      {(()=>{
+        const selRev=revByKey[`Overall Revenue__${selFY}`];
+        const selOv=plOvByKey[selFY];
+        const selMem=kpiByKey[`Active Members__${selFY}`];
+        const prevFY=FY_LIST[FY_LIST.indexOf(selFY)-1];
+        const prevRev=prevFY?revByKey[`Overall Revenue__${prevFY}`]:null;
+        const prevMem=prevFY?kpiByKey[`Active Members__${prevFY}`]:null;
+        return(<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <KCard label="Total Revenue" value={selRev?dollar(selRev.total):"—"} sub={selFY} accent={NAVY} trend={selRev&&prevRev&&prevRev.total?((selRev.total-prevRev.total)/prevRev.total)*100:null}/>
+          <KCard label="Overall P/(L)" value={selOv?dollar(selOv.profit_loss):"—"} sub={selOv&&selRev?.total?`Margin: ${pct(selOv.profit_loss/selRev.total)}`:selFY} accent={(selOv?.profit_loss||0)>=0?"#22c55e":"#ef4444"}/>
+          <KCard label="Active Members" value={selMem?num(selMem.total):"—"} sub={selFY} accent={GOLD} trend={selMem&&prevMem&&prevMem.total?((selMem.total-prevMem.total)/prevMem.total)*100:null}/>
+          <KCard label="New Members" value={kpiByKey[`New Members__${selFY}`]?num(kpiByKey[`New Members__${selFY}`].total):"—"} sub={selFY} accent="#22c55e"/>
+        </div>);
+      })()}
       {revByFY.length>1&&(
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <MultiYearChart data={revByFY} xKey="fy" keys={[{key:"total",name:"Total Revenue"},{key:"profit_loss",name:"Overall P/L"}]} title="Revenue & P/L Trend" height={220}/>
@@ -1295,10 +1331,18 @@ function OverviewModule({db}){
   // Available years/FYs for each fund
   const campYears=campByYear.map(r=>r.year);
   const cbYears=cbByYear.map(r=>r.year);
-  const fitFYsSorted=Object.keys(fitRevByFY).sort();
-  const recFYsSorted=Object.keys(recRevByFY).sort();
+  // Fitness: include FYs with actual revenue OR non-zero P/L, exclude future zeros
+  const fitFYsSorted=[...new Set([
+    ...Object.keys(fitRevByFY),
+    ...Object.keys(fitPLByFY).filter(fy=>fitPLByFY[fy]!==0&&fitPLByFY[fy]!=null)
+  ])].sort().filter(fy=>fitRevByFY[fy]>0||( fitPLByFY[fy]!=null&&fitPLByFY[fy]!==0));
+  // Rec: include FYs with actual revenue OR P/L data
+  const recFYsSorted=[...new Set([
+    ...Object.keys(recRevByFY),
+    ...Object.keys(recPLByFY).filter(fy=>recPLByFY[fy]!=null&&recPLByFY[fy]!==0)
+  ])].sort().filter(fy=>recRevByFY[fy]>0||(recPLByFY[fy]!=null&&recPLByFY[fy]!==0));
 
-  // Resolve selected year — default to latest if not set
+  // Resolve selected year — default to latest with data
   const campYear=campSelYear&&campYears.includes(campSelYear)?campSelYear:(campYears[campYears.length-1]||null);
   const cbYear=cbSelYear&&cbYears.includes(cbSelYear)?cbSelYear:(cbYears[cbYears.length-1]||null);
   const fitFY=fitSelFY&&fitFYsSorted.includes(fitSelFY)?fitSelFY:(fitFYsSorted[fitFYsSorted.length-1]||null);
